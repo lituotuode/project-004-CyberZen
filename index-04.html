@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>赛博木鱼 | 摇一摇积功德</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            font-family: -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 功德计数器 */
+        #counter {
+            font-size: 40px;
+            font-weight: bold;
+            color: #f1c40f;
+            margin-bottom: 50px;
+            text-shadow: 0 0 10px #f1c40f;
+        }
+        .label { font-size: 14px; color: #666; letter-spacing: 2px; }
+
+        /* CSS 画的极简木鱼 */
+        .muyu {
+            width: 200px;
+            height: 160px;
+            background: #e67e22;
+            border-radius: 50% 50% 40% 40%;
+            position: relative;
+            box-shadow: inset -10px -10px 0 rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+            cursor: pointer;
+        }
+        /* 木鱼的纹路 */
+        .muyu::after {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            width: 160px;
+            height: 80px;
+            border: 8px solid #d35400;
+            border-top: none;
+            border-radius: 0 0 80px 80px;
+        }
+        /* 敲击时的动画 */
+        .hit { transform: scale(0.95); }
+
+        /* 浮动文字动画 */
+        .float-text {
+            position: absolute;
+            color: #fff;
+            font-size: 24px;
+            animation: floatUp 1s ease-out forwards;
+            pointer-events: none;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-50px); }
+        }
+
+        /* 底部按钮区 */
+        .controls {
+            position: absolute;
+            bottom: 40px;
+            display: flex;
+            gap: 20px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: 1px solid #333;
+            background: #111;
+            color: #888;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="label">当前功德</div>
+    <div id="counter">0</div>
+
+    <div class="muyu" id="muyu" onclick="manualHit()"></div>
+
+    <div class="controls">
+        <button class="btn" onclick="requestPermission()">开启摇一摇 (iOS必点)</button>
+    </div>
+
+    <audio id="sound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_73689c4456.mp3"></audio>
+
+    <script>
+        let count = 0;
+        let lastX = 0, lastY = 0, lastZ = 0;
+        let lastTime = 0;
+        const SHAKE_THRESHOLD = 15; // 摇动阈值，越小越灵敏
+        const sound = document.getElementById('sound');
+        const muyu = document.getElementById('muyu');
+
+        // 核心功能：敲木鱼
+        function hit() {
+            // 1. 播放声音
+            sound.currentTime = 0;
+            sound.play();
+
+            // 2. 计数
+            count++;
+            document.getElementById('counter').innerText = count;
+
+            // 3. 动画
+            muyu.classList.add('hit');
+            setTimeout(() => muyu.classList.remove('hit'), 100);
+
+            // 4. 生成浮动文字 "功德+1"
+            const text = document.createElement('div');
+            text.className = 'float-text';
+            text.innerText = '功德 +1';
+            // 随机位置
+            text.style.left = (window.innerWidth / 2 - 30 + Math.random()*60) + 'px';
+            text.style.top = (window.innerHeight / 2 - 100) + 'px';
+            document.body.appendChild(text);
+            setTimeout(() => text.remove(), 1000);
+
+            // 5. 手机震动 (Haptics)
+            if (navigator.vibrate) navigator.vibrate(50);
+        }
+
+        // 手动点击
+        function manualHit() {
+            hit();
+        }
+
+        // 摇一摇检测逻辑
+        function handleMotion(event) {
+            const current = event.accelerationIncludingGravity;
+            const time = new Date().getTime();
+
+            if ((time - lastTime) > 100) { // 每100ms检测一次
+                const diffTime = time - lastTime;
+                lastTime = time;
+
+                const speed = Math.abs(current.x + current.y + current.z - lastX - lastY - lastZ) / diffTime * 10000;
+
+                if (speed > SHAKE_THRESHOLD * 100) {
+                    hit(); // 触发敲击
+                }
+
+                lastX = current.x;
+                lastY = current.y;
+                lastZ = current.z;
+            }
+        }
+
+        // iOS 权限请求 (技术老兵的经验)
+        function requestPermission() {
+            // 检查是不是 iOS 13+
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('devicemotion', handleMotion);
+                            alert("摇一摇已开启，快试试！");
+                        } else {
+                            alert("权限被拒绝，无法使用摇一摇");
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // 安卓或旧版iOS
+                window.addEventListener('devicemotion', handleMotion);
+                alert("已尝试开启，如果摇晃没反应请检查手机设置");
+            }
+        }
+        
+        // 自动初始化 (针对非iOS设备)
+        window.addEventListener('devicemotion', handleMotion);
+    </script>
+</body>
+</html>
